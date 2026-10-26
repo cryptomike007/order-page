@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Order Page</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #f2f5f3;
+    margin: 0;
+    padding: 16px;
+    color: #1d2b24;
+  }
+  .card {
+    max-width: 480px;
+    margin: 0 auto 16px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  p.hint { color: #667; font-size: 14px; margin: 0 0 16px; }
+  label { display: block; font-size: 14px; margin: 12px 0 4px; font-weight: bold; }
+  input, textarea {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ccd;
+    border-radius: 8px;
+  }
+  button {
+    font-size: 16px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #1f8f4e;
+    color: #fff;
+    margin-top: 12px;
+  }
+  button.secondary { background: #e3e8e5; color: #1d2b24; }
+  button.full { width: 100%; }
+  .row { display: flex; gap: 8px; }
+  .row input:first-child { flex: 2; }
+  .row input:last-child { flex: 1; }
+  .item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .item:last-child { border-bottom: none; }
+  .item-name { font-weight: bold; }
+  .item-price { color: #667; font-size: 14px; }
+  .qty { display: flex; align-items: center; gap: 12px; }
+  .qty button {
+    margin: 0;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 20px;
+  }
+  .remove { background: none; color: #c0392b; padding: 4px 8px; margin: 0; font-size: 14px; }
+  .total { font-size: 20px; font-weight: bold; text-align: right; margin-top: 16px; }
+  .linkbox { background: #eef6f1; padding: 12px; border-radius: 8px; word-break: break-all; font-size: 14px; margin-top: 12px; }
+  .hidden { display: none; }
+  .empty { color: #889; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- ============ VENDOR VIEW: where the seller sets up their shop ============ -->
+<div id="vendorView">
+  <div class="card">
+    <h1>Create your order page</h1>
+    <p class="hint">Add your items once. Share one link. Customers send you their order on WhatsApp.</p>
+
+    <label for="shopName">Business name</label>
+    <input id="shopName" placeholder="e.g. Mama Ngozi Kitchen">
+
+    <label for="shopPhone">Your WhatsApp number</label>
+    <input id="shopPhone" type="tel" placeholder="e.g. 08012345678">
+  </div>
+
+  <div class="card">
+    <h2>Your items</h2>
+    <div class="row">
+      <input id="newName" placeholder="Item name">
+      <input id="newPrice" type="number" min="0" placeholder="Price (₦)">
+    </div>
+    <button class="secondary full" id="addItemBtn">+ Add item</button>
+
+    <div id="vendorItems" style="margin-top: 12px;"></div>
+  </div>
+
+  <div class="card">
+    <button class="full" id="makeLinkBtn">Create my shareable link</button>
+    <div id="linkArea" class="hidden">
+      <div class="linkbox" id="linkText"></div>
+      <button class="secondary full" id="copyBtn">Copy link</button>
+      <button class="secondary full" id="openBtn">Preview my page</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CUSTOMER VIEW: what the buyer sees ============ -->
+<div id="customerView" class="hidden">
+  <div class="card">
+    <h1 id="custShopName"></h1>
+    <p class="hint">Tap + to choose what you want, then send your order on WhatsApp.</p>
+    <div id="custItems"></div>
+    <div class="total" id="totalText">Total: ₦0</div>
+  </div>
+
+  <div class="card">
+    <label for="custName">Your name</label>
+    <input id="custName" placeholder="Your name">
+
+    <label for="custNote">Note (optional)</label>
+    <textarea id="custNote" rows="2" placeholder="Delivery address, extra details..."></textarea>
+
+    <button class="full" id="sendBtn">Send order on WhatsApp</button>
+  </div>
+</div>
+
+<script>
+// ---------- Helpers ----------
+
+// Show a number as Naira, e.g. 2500 -> ₦2,500
+function naira(amount) {
+  return "₦" + Number(amount).toLocaleString("en-NG");
+}
+
+// Turn 08012345678 into 2348012345678 (the format WhatsApp links need)
+function cleanPhone(phone) {
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("0")) digits = "234" + digits.slice(1);
+  return digits;
+}
+
+// Shop data is packed into the link itself, so no server is needed.
+function encodeShop(shop) {
+  return btoa(encodeURIComponent(JSON.stringify(shop)));
+}
+function decodeShop(text) {
+  return JSON.parse(decodeURIComponent(atob(text)));
+}
+
+// ---------- Which view do we show? ----------
+// If the link has #shop=..., show the customer view. Otherwise show the vendor view.
+const hash = location.hash;
+if (hash.startsWith("#shop=")) {
+  try {
+    const shop = decodeShop(hash.slice(6));
+    startCustomerView(shop);
+  } catch (e) {
+    document.body.innerHTML = "<div class='card'><h1>Oops</h1><p>This link looks broken. Ask the seller for a new one.</p></div>";
+  }
+} else {
+  startVendorView();
+}
+
+// ==================== VENDOR VIEW ====================
+function startVendorView() {
+  document.getElementById("vendorView").classList.remove("hidden");
+
+  // Load anything saved earlier in this browser
+  let shop = JSON.parse(localStorage.getItem("myShop") || "null") || { name: "", phone: "", items: [] };
+
+  const shopName = document.getElementById("shopName");
+  const shopPhone = document.getElementById("shopPhone");
+  shopName.value = shop.name;
+  shopPhone.value = shop.phone;
+
+  function save() {
+    shop.name = shopName.value.trim();
+    shop.phone = shopPhone.value.trim();
+    localStorage.setItem("myShop", JSON.stringify(shop));
+  }
+  shopName.addEventListener("input", save);
+  shopPhone.addEventListener("input", save);
+
+  function drawItems() {
+    const box = document.getElementById("vendorItems");
+    if (shop.items.length === 0) {
+      box.innerHTML = "<p class='empty'>No items yet. Add your first one above.</p>";
+      return;
+    }
+    box.innerHTML = "";
+    shop.items.forEach(function (item, index) {
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML =
+        "<div><div class='item-name'></div><div class='item-price'>" + naira(item.price) + "</div></div>" +
+        "<button class='remove'>Remove</button>";
+      div.querySelector(".item-name").textContent = item.name; // textContent keeps it safe
+      div.querySelector(".remove").addEventListener("click", function () {
+        shop.items.splice(index, 1);
+        save();
+        drawItems();
+      });
+      box.appendChild(div);
+    });
+  }
+
+  document.getElementById("addItemBtn").addEventListener("click", function () {
+    const nameInput = document.getElementById("newName");
+    const priceInput = document.getElementById("newPrice");
+    const name = nameInput.value.trim();
+    const price = Number(priceInput.value);
+    if (!name || !price || price <= 0) {
+      alert("Please enter an item name and a price.");
+      return;
+    }
+    shop.items.push({ name: name, price: price });
+    nameInput.value = "";
+    priceInput.value = "";
+    save();
+    drawItems();
+    nameInput.focus();
+  });
+
+  let currentLink = "";
+  document.getElementById("makeLinkBtn").addEventListener("click", function () {
+    save();
+    if (!shop.name || !shop.phone || shop.items.length === 0) {
+      alert("Please add your business name, WhatsApp number, and at least one item.");
+      return;
+    }
+    const base = location.href.split("#")[0];
+    currentLink = base + "#shop=" + encodeShop(shop);
+    document.getElementById("linkText").textContent = currentLink;
+    document.getElementById("linkArea").classList.remove("hidden");
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", function () {
+    navigator.clipboard.writeText(currentLink).then(function () {
+      alert("Link copied! Paste it in your WhatsApp status or Instagram bio.");
+    });
+  });
+
+  document.getElementById("openBtn").addEventListener("click", function () {
+    window.open(currentLink, "_blank");
+  });
+
+  drawItems();
+}
+
+// ==================== CUSTOMER VIEW ====================
+function startCustomerView(shop) {
+  document.getElementById("customerView").classList.remove("hidden");
+  document.getElementById("custShopName").textContent = shop.name;
+  document.title = shop.name + " - Order";
+
+  // quantities[i] = how many of item i the customer picked
+  const quantities = shop.items.map(function () { return 0; });
+
+  function drawItems() {
+    const box = document.getElementById("custItems");
+    box.innerHTML = "";
+    shop.items.forEach(function (item, index) {
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML =
+        "<div><div class='item-name'></div><div class='item-price'>" + naira(item.price) + "</div></div>" +
+        "<div class='qty'><button class='minus'>−</button><span>" + quantities[index] + "</span><button class='plus'>+</button></div>";
+      div.querySelector(".item-name").textContent = item.name;
+      div.querySelector(".minus").addEventListener("click", function () {
+        if (quantities[index] > 0) quantities[index]--;
+        drawItems();
+      });
+      div.querySelector(".plus").addEventListener("click", function () {
+        quantities[index]++;
+        drawItems();
+      });
+      box.appendChild(div);
+    });
+
+    // Update the total
+    let total = 0;
+    shop.items.forEach(function (item, index) {
+      total += item.price * quantities[index];
+    });
+    document.getElementById("totalText").textContent = "Total: " + naira(total);
+  }
+
+  document.getElementById("sendBtn").addEventListener("click", function () {
+    const name = document.getElementById("custName").value.trim();
+    const note = document.getElementById("custNote").value.trim();
+
+    let lines = [];
+    let total = 0;
+    shop.items.forEach(function (item, index) {
+      if (quantities[index] > 0) {
+        const lineTotal = item.price * quantities[index];
+        total += lineTotal;
+        lines.push("- " + quantities[index] + " x " + item.name + " = " + naira(lineTotal));
+      }
+    });
+
+    if (lines.length === 0) {
+      alert("Please pick at least one item.");
+      return;
+    }
+    if (!name) {
+      alert("Please enter your name.");
+      return;
+    }
+
+    let message = "Hello " + shop.name + ", my name is " + name + ". I would like to order:\n\n" +
+      lines.join("\n") + "\n\nTotal: " + naira(total);
+    if (note) message += "\n\nNote: " + note;
+
+    const url = "https://wa.me/" + cleanPhone(shop.phone) + "?text=" + encodeURIComponent(message);
+    window.open(url, "_blank");
+  });
+
+  drawItems();
+}
+</script>
+</body>
+</html>
