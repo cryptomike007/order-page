@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WhatsApp Order Page</title>
+<title>Shop Inventory and Orders</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -12,6 +12,11 @@
     margin: 0;
     padding: 16px;
     color: #1d2b24;
+  }
+  .ThemeSwitch{
+    margin: 10px;
+    
+    
   }
   .card {
     max-width: 480px;
@@ -42,11 +47,25 @@
     color: #fff;
     margin-top: 12px;
   }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
   button.secondary { background: #e3e8e5; color: #1d2b24; }
+  button.danger { background: #fde2e0; color: #c0392b; }
   button.full { width: 100%; }
+  button.small { font-size: 14px; padding: 8px 10px; margin: 0; }
   .row { display: flex; gap: 8px; }
-  .row input:first-child { flex: 2; }
-  .row input:last-child { flex: 1; }
+  .row > div { flex: 1; }
+
+  /* Stock summary boxes */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { background: #f2f5f3; border-radius: 8px; padding: 10px; font-size: 13px; color: #556; }
+  .stat b { display: block; font-size: 18px; color: #1d2b24; }
+
+  /* Seller item rows */
+  .item-vendor { padding: 12px 0; border-bottom: 1px solid #eee; }
+  .item-vendor:last-child { border-bottom: none; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+  /* Customer item rows */
   .item {
     display: flex;
     align-items: center;
@@ -56,59 +75,86 @@
   }
   .item:last-child { border-bottom: none; }
   .item-name { font-weight: bold; }
-  .item-price { color: #667; font-size: 14px; }
+  .item-price { color: #667; font-size: 14px; margin-top: 2px; }
+  .item-note { color: #8a6d00; font-size: 13px; margin-top: 2px; }
   .qty { display: flex; align-items: center; gap: 12px; }
-  .qty button {
-    margin: 0;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    font-size: 20px;
-  }
-  .remove { background: none; color: #c0392b; padding: 4px 8px; margin: 0; font-size: 14px; }
+  .qty button { margin: 0; width: 36px; height: 36px; padding: 0; font-size: 20px; }
+
+  /* Stock badges */
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 10px; margin-left: 8px; font-weight: bold; }
+  .badge.ok { background: #e3f4ea; color: #1f8f4e; }
+  .badge.low { background: #fff3cd; color: #8a6d00; }
+  .badge.out { background: #fde2e0; color: #c0392b; }
+
   .total { font-size: 20px; font-weight: bold; text-align: right; margin-top: 16px; }
   .linkbox { background: #eef6f1; padding: 12px; border-radius: 8px; word-break: break-all; font-size: 14px; margin-top: 12px; }
   .hidden { display: none; }
   .empty { color: #889; font-size: 14px; }
 </style>
 </head>
-<body>
+<body id="body">
 
-<!-- ============ VENDOR VIEW: where the seller sets up their shop ============ -->
-<div id="vendorView">
+<!-- ============ SELLER VIEW: inventory ============ -->
+<div id="vendorView" class="hidden">
   <div class="card">
-    <h1>Create your order page</h1>
-    <p class="hint">Add your items once. Share one link. Customers send you their order on WhatsApp.</p>
+    <h1>My shop inventory</h1>
+    <p class="hint">Keep track of your stock, and share an order page with your customers.</p>
 
     <label for="shopName">Business name</label>
-    <input id="shopName" placeholder="e.g. Mama Ngozi Kitchen">
+    <input id="shopName" placeholder="Type your Business Name here" autocapitalize="words" >
 
     <label for="shopPhone">Your WhatsApp number</label>
     <input id="shopPhone" type="tel" placeholder="e.g. 08012345678">
   </div>
 
   <div class="card">
-    <h2>Your items</h2>
-    <div class="row">
-      <input id="newName" placeholder="Item name">
-      <input id="newPrice" type="number" min="0" placeholder="Price (₦)">
+    <h2>Stock summary</h2>
+    <div class="stats">
+      <div class="stat"><b id="statItems">0</b>Items</div>
+      <div class="stat"><b id="statUnits">0</b>Units in stock</div>
+      <div class="stat"><b id="statValue">₦0</b>Stock value</div>
+      <div class="stat"><b id="statLow">0</b>Low or sold out</div>
     </div>
-    <button class="secondary full" id="addItemBtn">+ Add item</button>
-
-    <div id="vendorItems" style="margin-top: 12px;"></div>
   </div>
 
   <div class="card">
-    <button class="full" id="makeLinkBtn">Create my shareable link</button>
+    <h2 id="formTitle">Add an item</h2>
+    <label for="newName">Item name</label>
+    <input id="newName" placeholder="Type your Item Name here">
+    <div class="row">
+      <div>
+        <label for="newPrice">Price (₦)</label>
+        <input id="newPrice" type="number" min="0" inputmode="numeric" placeholder="1500">
+      </div>
+      <div>
+        <label for="newStock">In stock</label>
+        <input id="newStock" type="number" min="0" inputmode="numeric" placeholder="20">
+        <label for="newImage">Photo link (optional)</label>
+<input id="newImage" placeholder="https://...">
+      </div>
+    </div>
+    <button class="full" id="addItemBtn">+ Add item</button>
+    <button class="secondary full hidden" id="cancelEditBtn">Cancel</button>
+  </div>
+
+  <div class="card">
+    <h2>Your items</h2>
+    <div id="vendorItems"></div>
+  </div>
+
+  <div class="card">
+    <h2>Share with customers</h2>
+    <p class="hint">The link shows your items and how many are in stock right now. After your stock changes, create a new link and share it again.</p>
+    <button class="full" id="makeLinkBtn">Create order link</button>
     <div id="linkArea" class="hidden">
       <div class="linkbox" id="linkText"></div>
       <button class="secondary full" id="copyBtn">Copy link</button>
-      <button class="secondary full" id="openBtn">Preview my page</button>
+      <button class="secondary full" id="openBtn">Preview customer page</button>
     </div>
   </div>
 </div>
 
-<!-- ============ CUSTOMER VIEW: what the buyer sees ============ -->
+<!-- ============ CUSTOMER VIEW: order page ============ -->
 <div id="customerView" class="hidden">
   <div class="card">
     <h1 id="custShopName"></h1>
@@ -120,7 +166,11 @@
   <div class="card">
     <label for="custName">Your name</label>
     <input id="custName" placeholder="Your name">
-
+<label for="custMode">Delivery or pickup?</label>
+<select id="custMode">
+  <option value="Pickup">Pickup</option>
+  <option value="Delivery">Delivery</option>
+</select>
     <label for="custNote">Note (optional)</label>
     <textarea id="custNote" rows="2" placeholder="Delivery address, extra details..."></textarea>
 
@@ -128,7 +178,11 @@
   </div>
 </div>
 
-<script>
+<script type="text/javascript">
+// ---------- Settings ----------
+// An item with this many (or fewer) in stock is marked "Low"
+const LOW_STOCK = 5;
+
 // ---------- Helpers ----------
 
 // Show a number as Naira, e.g. 2500 -> ₦2,500
@@ -143,16 +197,53 @@ function cleanPhone(phone) {
   return digits;
 }
 
-// Shop data is packed into the link itself, so no server is needed.
-function encodeShop(shop) {
-  return btoa(encodeURIComponent(JSON.stringify(shop)));
+// Decide the badge for an item: sold out, low, or fine
+function stockStatus(stock) {
+  if (stock <= 0) return { text: "Out of stock", cls: "out" };
+  if (stock <= LOW_STOCK) return { text: "Low: " + stock + " left", cls: "low" };
+  return { text: "In stock", cls: "ok" };
 }
+
+// Ask the seller for a number (used for "Sold" and "Restock")
+function askNumber(message) {
+  const answer = prompt(message, "1");
+  if (answer === null) return null;
+  const n = Math.floor(Number(answer));
+  if (!(n > 0)) {
+    alert("Please enter a number above 0.");
+    return null;
+  }
+  return n;
+}
+
+// The shop data is packed into the link, so no server is needed.
+// Each item is stored as [name, price, stock] to keep the link shorter.
+function encodeShop(shop) {
+  const packed = {
+    name: shop.name,
+    phone: shop.phone,
+    items: shop.items.map(function (item) { return [item.name, item.price, item.stock]; })
+  };
+  return btoa(encodeURIComponent(JSON.stringify(packed)));
+}
+
 function decodeShop(text) {
-  return JSON.parse(decodeURIComponent(atob(text)));
+  const raw = JSON.parse(decodeURIComponent(atob(text)));
+  return {
+    name: raw.name,
+    phone: raw.phone,
+    items: raw.items.map(function (item) {
+      if (Array.isArray(item)) {
+        return { name: item[0], price: item[1], stock: item[2] };
+      }
+      // Older links had no stock numbers, so there is no limit
+      return { name: item.name, price: item.price, stock: null };
+    })
+  };
 }
 
 // ---------- Which view do we show? ----------
-// If the link has #shop=..., show the customer view. Otherwise show the vendor view.
+// If the link has #shop=..., show the customer view. Otherwise show the seller view.
 const hash = location.hash;
 if (hash.startsWith("#shop=")) {
   try {
@@ -165,15 +256,31 @@ if (hash.startsWith("#shop=")) {
   startVendorView();
 }
 
-// ==================== VENDOR VIEW ====================
+// ==================== SELLER VIEW ====================
 function startVendorView() {
   document.getElementById("vendorView").classList.remove("hidden");
 
   // Load anything saved earlier in this browser
   let shop = JSON.parse(localStorage.getItem("myShop") || "null") || { name: "", phone: "", items: [] };
 
+  // Items saved by the older version had no stock number, so we give them one
+  shop.items = shop.items.map(function (item) {
+    return {
+      name: item.name,
+      price: Number(item.price),
+      stock: Math.max(0, Math.floor(Number(item.stock) || 0))
+    };
+  });
+
   const shopName = document.getElementById("shopName");
   const shopPhone = document.getElementById("shopPhone");
+  const newName = document.getElementById("newName");
+  const newPrice = document.getElementById("newPrice");
+  const newStock = document.getElementById("newStock");
+  const addBtn = document.getElementById("addItemBtn");
+  const cancelBtn = document.getElementById("cancelEditBtn");
+  const formTitle = document.getElementById("formTitle");
+
   shopName.value = shop.name;
   shopPhone.value = shop.phone;
 
@@ -185,6 +292,47 @@ function startVendorView() {
   shopName.addEventListener("input", save);
   shopPhone.addEventListener("input", save);
 
+  // editingIndex remembers which item we are editing (null means we are adding a new one)
+  let editingIndex = null;
+
+  function startEditing(index) {
+    const item = shop.items[index];
+    editingIndex = index;
+    newName.value = item.name;
+    newPrice.value = item.price;
+    newStock.value = item.stock;
+    formTitle.textContent = "Edit item";
+    addBtn.textContent = "Save changes";
+    cancelBtn.classList.remove("hidden");
+    newName.focus();
+  }
+
+  function stopEditing() {
+    editingIndex = null;
+    newName.value = "";
+    newPrice.value = "";
+    newStock.value = "";
+    formTitle.textContent = "Add an item";
+    addBtn.textContent = "+ Add item";
+    cancelBtn.classList.add("hidden");
+  }
+
+  // The four boxes at the top: items, units, value, low stock
+  function drawStats() {
+    let units = 0;
+    let value = 0;
+    let low = 0;
+    shop.items.forEach(function (item) {
+      units += item.stock;
+      value += item.stock * item.price;
+      if (item.stock <= LOW_STOCK) low++;
+    });
+    document.getElementById("statItems").textContent = shop.items.length;
+    document.getElementById("statUnits").textContent = units.toLocaleString("en-NG");
+    document.getElementById("statValue").textContent = naira(value);
+    document.getElementById("statLow").textContent = low;
+  }
+
   function drawItems() {
     const box = document.getElementById("vendorItems");
     if (shop.items.length === 0) {
@@ -193,37 +341,85 @@ function startVendorView() {
     }
     box.innerHTML = "";
     shop.items.forEach(function (item, index) {
+      const status = stockStatus(item.stock);
       const div = document.createElement("div");
-      div.className = "item";
+      div.className = "item-vendor";
       div.innerHTML =
-        "<div><div class='item-name'></div><div class='item-price'>" + naira(item.price) + "</div></div>" +
-        "<button class='remove'>Remove</button>";
+        "<div><span class='item-name'></span><span class='badge " + status.cls + "'>" + status.text + "</span></div>" +
+        "<div class='item-price'>" + naira(item.price) + " each · " + item.stock + " in stock</div>" +
+        "<div class='actions'>" +
+          "<button class='small sold'>− Sold</button>" +
+          "<button class='small restock'>+ Restock</button>" +
+          "<button class='small secondary edit'>Edit</button>" +
+          "<button class='small danger remove'>Remove</button>" +
+        "</div>";
       div.querySelector(".item-name").textContent = item.name; // textContent keeps it safe
-      div.querySelector(".remove").addEventListener("click", function () {
-        shop.items.splice(index, 1);
+
+      // Sold: take some units out of stock
+      div.querySelector(".sold").addEventListener("click", function () {
+        const qty = askNumber("How many did you sell?");
+        if (qty === null) return;
+        if (qty > item.stock) {
+          alert("You only have " + item.stock + " in stock.");
+          return;
+        }
+        item.stock -= qty;
         save();
-        drawItems();
+        drawAll();
       });
+
+      // Restock: add units to stock
+      div.querySelector(".restock").addEventListener("click", function () {
+        const qty = askNumber("How many are you adding to stock?");
+        if (qty === null) return;
+        item.stock += qty;
+        save();
+        drawAll();
+      });
+
+      div.querySelector(".edit").addEventListener("click", function () {
+        startEditing(index);
+      });
+
+      div.querySelector(".remove").addEventListener("click", function () {
+        if (!confirm("Remove " + item.name + "?")) return;
+        shop.items.splice(index, 1);
+        stopEditing();
+        save();
+        drawAll();
+      });
+
       box.appendChild(div);
     });
   }
 
-  document.getElementById("addItemBtn").addEventListener("click", function () {
-    const nameInput = document.getElementById("newName");
-    const priceInput = document.getElementById("newPrice");
-    const name = nameInput.value.trim();
-    const price = Number(priceInput.value);
-    if (!name || !price || price <= 0) {
-      alert("Please enter an item name and a price.");
+  function drawAll() {
+    drawStats();
+    drawItems();
+  }
+
+  addBtn.addEventListener("click", function () {
+    const name = newName.value.trim();
+    const price = Number(newPrice.value);
+    const stock = Math.floor(Number(newStock.value));
+    if (!name || !(price > 0) || newStock.value === "" || !(stock >= 0)) {
+      alert("Please enter an item name, a price, and how many you have in stock.");
       return;
     }
-    shop.items.push({ name: name, price: price });
-    nameInput.value = "";
-    priceInput.value = "";
+    if (editingIndex !== null) {
+      // We are editing: replace the old item with the new details
+      shop.items[editingIndex] = { name: name, price: price, stock: stock };
+    } else {
+      // We are adding a brand new item
+      shop.items.push({ name: name, price: price, stock: stock });
+    }
+    stopEditing();
     save();
-    drawItems();
-    nameInput.focus();
+    drawAll();
+    newName.focus();
   });
+
+  cancelBtn.addEventListener("click", stopEditing);
 
   let currentLink = "";
   document.getElementById("makeLinkBtn").addEventListener("click", function () {
@@ -248,7 +444,7 @@ function startVendorView() {
     window.open(currentLink, "_blank");
   });
 
-  drawItems();
+  drawAll();
 }
 
 // ==================== CUSTOMER VIEW ====================
@@ -264,20 +460,45 @@ function startCustomerView(shop) {
     const box = document.getElementById("custItems");
     box.innerHTML = "";
     shop.items.forEach(function (item, index) {
+      // Older links have no stock number, so there is no limit for them
+      const limited = typeof item.stock === "number";
+      const soldOut = limited && item.stock <= 0;
+      const atMax = limited && quantities[index] >= item.stock;
+
+      let rightSide;
+      if (soldOut) {
+        rightSide = "<span class='badge out'>Sold out</span>";
+      } else {
+        rightSide =
+          "<div class='qty'>" +
+            "<button class='minus'>−</button>" +
+            "<span>" + quantities[index] + "</span>" +
+            "<button class='plus'" + (atMax ? " disabled" : "") + ">+</button>" +
+          "</div>";
+      }
+
+      let note = "";
+      if (limited && !soldOut && item.stock <= LOW_STOCK) {
+        note = "<div class='item-note'>Only " + item.stock + " left</div>";
+      }
+
       const div = document.createElement("div");
       div.className = "item";
       div.innerHTML =
-        "<div><div class='item-name'></div><div class='item-price'>" + naira(item.price) + "</div></div>" +
-        "<div class='qty'><button class='minus'>−</button><span>" + quantities[index] + "</span><button class='plus'>+</button></div>";
+        "<div><div class='item-name'></div><div class='item-price'>" + naira(item.price) + "</div>" + note + "</div>" +
+        rightSide;
       div.querySelector(".item-name").textContent = item.name;
-      div.querySelector(".minus").addEventListener("click", function () {
-        if (quantities[index] > 0) quantities[index]--;
-        drawItems();
-      });
-      div.querySelector(".plus").addEventListener("click", function () {
-        quantities[index]++;
-        drawItems();
-      });
+
+      if (!soldOut) {
+        div.querySelector(".minus").addEventListener("click", function () {
+          if (quantities[index] > 0) quantities[index]--;
+          drawItems();
+        });
+        div.querySelector(".plus").addEventListener("click", function () {
+          if (!limited || quantities[index] < item.stock) quantities[index]++;
+          drawItems();
+        });
+      }
       box.appendChild(div);
     });
 
@@ -292,6 +513,7 @@ function startCustomerView(shop) {
   document.getElementById("sendBtn").addEventListener("click", function () {
     const name = document.getElementById("custName").value.trim();
     const note = document.getElementById("custNote").value.trim();
+    const mode = document.getElementById("custMode").value;
 
     let lines = [];
     let total = 0;
@@ -315,6 +537,7 @@ function startCustomerView(shop) {
     let message = "Hello " + shop.name + ", my name is " + name + ". I would like to order:\n\n" +
       lines.join("\n") + "\n\nTotal: " + naira(total);
     if (note) message += "\n\nNote: " + note;
+    message += "\n\nDelivery or pickup: " + mode;
 
     const url = "https://wa.me/" + cleanPhone(shop.phone) + "?text=" + encodeURIComponent(message);
     window.open(url, "_blank");
